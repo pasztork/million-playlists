@@ -1,10 +1,11 @@
-#from loader import PlaylistIterator
-from .callbacks import LogEpochLossCallback
 import os
 from argparse import ArgumentParser
+
 from gensim.models import Word2Vec
 
 from data.stream.iters import PlaylistIterator
+
+from .callbacks import LogEpochLossCallback
 
 
 def main():
@@ -26,25 +27,31 @@ def main():
 
     limit = args.debug if args.debug > 0 else None
     files = [os.path.join(args.data, fname) for fname in os.listdir(args.data)]
+
     loader = PlaylistIterator(files, limit)
     logger = LogEpochLossCallback()
 
+    # a playlist is a sentence, a song is a word
+    sentences = []
+    for pl in loader:
+        songs = [track["track_uri"] for track in pl["tracks"]]
+        if len(songs) > 1:
+            sentences.append(songs)
+
     model = Word2Vec(
+        sentences=sentences,
         vector_size=args.dim,
         window=args.window,
         min_count=args.mincount,
-        workers=args.workers
+        sg=1,
+        epochs=args.epochs,
+        workers=args.workers,
+        compute_loss=True,
+        callbacks=[logger],
     )
 
-    print("Building vocabulary...")
-    model.build_vocab(loader)
-    print("Training...")
-    model.train(loader, epochs=args.epochs, 
-                total_examples=len(loader), 
-                compute_loss=True,
-                callbacks=[logger])
-    print(f"Saving model to {args.output}")
-    model.save(os.path.join(args.output, args.savename))    
+    print(f"Saving model to {args.output}/{args.savename}")
+    model.save(os.path.join(args.output, args.savename))
 
 
 if __name__ == "__main__":
